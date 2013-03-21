@@ -20,6 +20,7 @@ package com.timboudreau.adhoc.project;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -65,9 +66,9 @@ public class AdhocProjectFactory implements ProjectFactory, ProjectFactory2 {
         f.add(res);
         return res;
     }
-    
+
     private static String toNodeName(FileObject fo) {
-        return fo.getPath().replace('/', '_').replace('\\', '_').replace(':', '_');
+        return fo.getPath().replace('/', '~').replace('\\', '!').replace(':', '~');
     }
 
     private static class Flusher {
@@ -92,20 +93,15 @@ public class AdhocProjectFactory implements ProjectFactory, ProjectFactory2 {
 
     private static synchronized Set<String> knownProjects() {
         if (System.currentTimeMillis() - lastFetch > 60000) {
-            System.out.println("Refetch projects - was " + all);
             lastFetch = System.currentTimeMillis();
             Set<String> result = new HashSet<>();
             try {
                 Preferences allNodes = projectsList(new Flusher());
                 String[] kids = allNodes.childrenNames();
-                System.out.println("  Found " + kids.length + " prject nodes");
-                for (String s : allNodes.childrenNames()) {
-                    System.out.println("NAME " + s);
+                for (String s : kids) {
                     Preferences n = allNodes.node(s);
                     if (n.getBoolean("alive", false)) {
                         result.add(s);
-                    } else {
-                        System.out.println("Not adding " + s);
                     }
                 }
             } catch (BackingStoreException ex) {
@@ -114,9 +110,7 @@ public class AdhocProjectFactory implements ProjectFactory, ProjectFactory2 {
             }
 //            all.clear();
             all.addAll(result);
-            System.out.println("  now with " + result.size());
         }
-        System.out.println("KNOWN PROJECTS IS " + all);
         return all;
     }
 
@@ -126,11 +120,11 @@ public class AdhocProjectFactory implements ProjectFactory, ProjectFactory2 {
     }
 
     static boolean check(FileObject fo) {
-        return fo == null ? false : knownProjects().contains(toNodeName(fo)) && fo.isFolder();
+        boolean result = fo == null ? false : knownProjects().contains(toNodeName(fo)) && fo.isFolder();
+        return result;
     }
 
     static void mark(FileObject fo) throws IOException {
-        System.out.println("MARK " + toNodeName(fo));
         Flusher f = new Flusher();
         Preferences mine = forProject(f, fo);
         mine.putBoolean("alive", true);
@@ -141,6 +135,7 @@ public class AdhocProjectFactory implements ProjectFactory, ProjectFactory2 {
         } finally {
             f.flush();
         }
+        ProjectManager.getDefault().clearNonProjectCache();
     }
 
     static AdhocProject findLiveOwner(FileObject fo) {
