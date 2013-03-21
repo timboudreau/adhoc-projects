@@ -416,22 +416,27 @@ public class AdhocProjectNode extends FilterNode implements LogicalViewProvider,
                 return new Node[]{new FN(key)};
             }
 
-            private void updateFavorites(Node node) {
+            private void updateFavorites(Node node, boolean explicit) {
                 DataObject dob = node.getLookup().lookup(DataObject.class);
                 if (dob != null) {
                     String relPath = FileUtil.getRelativePath(prj.getProjectDirectory(), dob.getPrimaryFile());
                     if (relPath != null) {
                         Set<Favorite> it = new HashSet<>(prj.favorites());
+                        // Always move it into the highest position
+                        int max = 1;
+                        for (Favorite f : it) {
+                            max = Math.max(max, f.count);
+                        }
                         boolean found = false;
                         for (Favorite item : it) {
                             if (item.relPath.equals(relPath)) {
-                                item.count++;
+                                item.count = explicit ? max + 1 : item.count + 1;
                                 found = true;
                                 break;
                             }
                         }
                         if (!found) {
-                            it.add(new Favorite(1, relPath));
+                            it.add(new Favorite(explicit ? max + 1 : 1, relPath));
                         }
                         prj.saveFavorites(it);
                         for (Runnable r : this.runs) {
@@ -476,7 +481,7 @@ public class AdhocProjectNode extends FilterNode implements LogicalViewProvider,
 
                     @Override
                     public void actionPerformed(ActionEvent ae) {
-                        updateFavorites(FN.this);
+                        updateFavorites(FN.this, true);
                     }
                 }
 
@@ -529,7 +534,7 @@ public class AdhocProjectNode extends FilterNode implements LogicalViewProvider,
                     @Override
                     public void actionPerformed(ActionEvent ae) {
                         delegate.actionPerformed(ae);
-                        updateFavorites(FN.this);
+                        updateFavorites(FN.this, false);
                     }
                 }
 
@@ -585,7 +590,7 @@ public class AdhocProjectNode extends FilterNode implements LogicalViewProvider,
                     @Override
                     public void actionPerformed(ActionEvent ae) {
                         delegate.actionPerformed(ae);
-                        updateFavorites(FN.this);
+                        updateFavorites(FN.this, false);
                     }
                 }
             }
