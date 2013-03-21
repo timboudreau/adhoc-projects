@@ -18,7 +18,7 @@ The project does allow you to set code formatting options on a per-project basis
 
 Installation
 ------------
-Download the latest ``nbm`` file from [the continuous build server](http://timboudreau.com/builds).  Install it in the IDE by opening **Tools | Plugins**, on the **Downloaded** tab.
+Download the latest ``nbm`` file from [the continuous build server](https://glo.ms/builds/job/Netbeans-Adhoc-Project-Plugin/lastSuccessfulBuild/artifact/adhoc-project/target/).  Install it in the IDE by opening **Tools | Plugins**, on the **Downloaded** tab.
 
 License
 -------
