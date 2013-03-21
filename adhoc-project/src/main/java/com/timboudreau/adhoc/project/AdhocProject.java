@@ -171,7 +171,7 @@ public class AdhocProject implements Project,
     @Override
     public String[] getSupportedActions() {
         return new String[]{
-            COMMAND_DELETE, COMMAND_MOVE, COMMAND_COPY, COMMAND_RENAME, null, CUSTOMIZE_COMMAND
+            COMMAND_DELETE, COMMAND_MOVE, COMMAND_COPY, COMMAND_RENAME, CUSTOMIZE_COMMAND
         };
     }
 
