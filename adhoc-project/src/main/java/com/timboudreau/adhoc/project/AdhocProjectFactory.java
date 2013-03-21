@@ -19,7 +19,13 @@
 package com.timboudreau.adhoc.project;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
+import java.util.prefs.BackingStoreException;
+import java.util.prefs.Preferences;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.spi.project.ProjectFactory;
@@ -28,6 +34,7 @@ import org.netbeans.spi.project.ProjectState;
 import org.openide.filesystems.FileObject;
 import org.openide.util.Exceptions;
 import org.openide.util.ImageUtilities;
+import org.openide.util.NbPreferences;
 import org.openide.util.WeakSet;
 import org.openide.util.lookup.ServiceProvider;
 import org.openide.util.lookup.ServiceProviders;
@@ -42,6 +49,76 @@ import org.openide.util.lookup.ServiceProviders;
 public class AdhocProjectFactory implements ProjectFactory, ProjectFactory2 {
 
     private static Set<AdhocProject> cache = new WeakSet<>();
+    private static long lastFetch = 0;
+    private static final Set<String> all = Collections.synchronizedSet(new HashSet<String>());
+
+    private static Preferences projectsList(Flusher f) {
+        Preferences pp = NbPreferences.forModule(AdhocProjectFactory.class);
+        Preferences all = pp.node("__projects");
+        f.add(pp);
+        f.add(all);
+        return all;
+    }
+
+    private static Preferences forProject(Flusher f, FileObject fo) {
+        Preferences res = projectsList(f).node(toNodeName(fo));
+        f.add(res);
+        return res;
+    }
+    
+    private static String toNodeName(FileObject fo) {
+        return fo.getPath().replace('/', '_').replace('\\', '_').replace(':', '_');
+    }
+
+    private static class Flusher {
+
+        private final List<Preferences> all = new ArrayList<>();
+
+        void add(Preferences prefs) {
+            all.add(prefs);
+        }
+
+        void flush() {
+            int max = all.size() - 1;
+            for (int i = max; i >= 0; i--) {
+                try {
+                    all.get(i).flush();
+                } catch (BackingStoreException ex) {
+                    Exceptions.printStackTrace(ex);
+                }
+            }
+        }
+    }
+
+    private static synchronized Set<String> knownProjects() {
+        if (System.currentTimeMillis() - lastFetch > 60000) {
+            System.out.println("Refetch projects - was " + all);
+            lastFetch = System.currentTimeMillis();
+            Set<String> result = new HashSet<>();
+            try {
+                Preferences allNodes = projectsList(new Flusher());
+                String[] kids = allNodes.childrenNames();
+                System.out.println("  Found " + kids.length + " prject nodes");
+                for (String s : allNodes.childrenNames()) {
+                    System.out.println("NAME " + s);
+                    Preferences n = allNodes.node(s);
+                    if (n.getBoolean("alive", false)) {
+                        result.add(s);
+                    } else {
+                        System.out.println("Not adding " + s);
+                    }
+                }
+            } catch (BackingStoreException ex) {
+                Exceptions.printStackTrace(ex);
+                return Collections.emptySet();
+            }
+//            all.clear();
+            all.addAll(result);
+            System.out.println("  now with " + result.size());
+        }
+        System.out.println("KNOWN PROJECTS IS " + all);
+        return all;
+    }
 
     @Override
     public boolean isProject(FileObject fo) {
@@ -49,14 +126,21 @@ public class AdhocProjectFactory implements ProjectFactory, ProjectFactory2 {
     }
 
     static boolean check(FileObject fo) {
-        if (fo == null) {
-            return false;
-        }
-        return fo.isFolder() && "adhoc".equals(fo.getAttribute("adhocProject"));
+        return fo == null ? false : knownProjects().contains(toNodeName(fo)) && fo.isFolder();
     }
 
     static void mark(FileObject fo) throws IOException {
-        fo.setAttribute("adhocProject", "adhoc");
+        System.out.println("MARK " + toNodeName(fo));
+        Flusher f = new Flusher();
+        Preferences mine = forProject(f, fo);
+        mine.putBoolean("alive", true);
+        try {
+            synchronized (AdhocProjectFactory.class) {
+                all.add(toNodeName(fo));
+            }
+        } finally {
+            f.flush();
+        }
     }
 
     static AdhocProject findLiveOwner(FileObject fo) {
@@ -94,13 +178,13 @@ public class AdhocProjectFactory implements ProjectFactory, ProjectFactory2 {
         if (fo == null) {
             return null;
         }
-//        for (AdhocProject p : cache) {
-//            if (p != null) {
-//                if (p.getProjectDirectory().equals(fo)) {
-//                    return p;
-//                }
-//            }
-//        }
+        for (AdhocProject p : cache) {
+            if (p != null) {
+                if (p.getProjectDirectory().equals(fo)) {
+                    return p;
+                }
+            }
+        }
         if (isProject(fo)) {
             AdhocProject result = new AdhocProject(fo, ps);
             cache.add(result);
@@ -119,7 +203,7 @@ public class AdhocProjectFactory implements ProjectFactory, ProjectFactory2 {
         if (fo == null) {
             return null;
         }
-        if ("adhoc".equals(fo.getAttribute("adhocProject"))) {
+        if (check(fo)) {
             return new ProjectManager.Result(ImageUtilities.loadImageIcon("com/timboudreau/adhoc/project/adhoc.png", true));
         }
         return null;

@@ -89,7 +89,6 @@ public class AdhocProject implements Project,
         this.encodingQuery = new EncQueryImpl();
         this.dir = dir;
         this.state = state;
-        dir.setAttribute("adhocProject", true);
     }
 
     @Override
@@ -210,7 +209,7 @@ public class AdhocProject implements Project,
                             fo.rename(lock, txt, null);
                             FileObject nue = parent.getFileObject(txt);
                             assert nue != null;
-                            nue.setAttribute("adhocProject", "adhoc");
+                            AdhocProjectFactory.mark(nue);
                             dir = nue;
                             Preferences nuPrefs = preferences(true);
                             copyPreferences(old, nuPrefs);
