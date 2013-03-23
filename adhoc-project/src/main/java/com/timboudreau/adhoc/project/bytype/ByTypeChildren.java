@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.netbeans.api.queries.VisibilityQuery;
 import org.openide.filesystems.FileObject;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectNotFoundException;
@@ -163,6 +164,9 @@ public class ByTypeChildren extends Children.Keys<MimeType> {
         if (depth == maxDepth || !root.isValid()) {
             return false;
         }
+        if (!VisibilityQuery.getDefault().isVisible(root)) {
+            return attached;
+        }
         if (root.isData() && root.canRead() && root.isValid()) {
             boolean result = v.visitFileObject(root, arg);
             if (!result) {
@@ -177,7 +181,7 @@ public class ByTypeChildren extends Children.Keys<MimeType> {
                 }
             }
         }
-        return true;
+        return attached;
     }
     
     private class RelativePathNode extends FilterNode {
@@ -250,6 +254,9 @@ public class ByTypeChildren extends Children.Keys<MimeType> {
                 }
                 StringBuilder sb = new StringBuilder(sub);
                 sb.setCharAt(0, Character.toUpperCase(sb.charAt(0)));
+                if ("Sh".equals(sb.toString())) {
+                    return "Shell Scripts";
+                }
                 return sb.toString();
             }
             return type;

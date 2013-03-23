@@ -4,7 +4,7 @@
 
     <groupId>com.timboudreau</groupId>
     <artifactId>adhoc-project</artifactId>
-    <version>1.14</version>
+    <version>1.15</version>
     <packaging>nbm</packaging>
 
     <name>Adhoc Projects</name>
