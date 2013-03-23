@@ -183,10 +183,11 @@ public class AdhocProjectTest {
         assertNotNull(pn);
         Node[] nn = pn.getChildren().getNodes(true);
         assertNotNull(nn);
-        assertEquals(2, nn.length);
+        assertEquals(3, nn.length);
         assertEquals("Favorites", nn[0].getName());
-        assertEquals("Sources", nn[1].getName());
-        Node[] sources = nn[1].getChildren().getNodes(true);
+        assertEquals("byType", nn[1].getName());
+        assertEquals("Sources", nn[2].getName());
+        Node[] sources = nn[2].getChildren().getNodes(true);
         assertNotNull(sources);
         assertEquals(10, sources.length);
 

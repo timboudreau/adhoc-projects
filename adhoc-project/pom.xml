@@ -4,14 +4,14 @@
 
     <groupId>com.timboudreau</groupId>
     <artifactId>adhoc-project</artifactId>
-    <version>1.12</version>
+    <version>1.13</version>
     <packaging>nbm</packaging>
 
     <name>Adhoc Projects</name>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <netbeans.hint.license>license-mit.txt</netbeans.hint.license>
+        <netbeans.hint.license>mit</netbeans.hint.license>
     </properties>
 
     <repositories>

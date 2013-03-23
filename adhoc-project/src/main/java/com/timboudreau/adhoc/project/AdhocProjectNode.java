@@ -18,6 +18,7 @@
  CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
 package com.timboudreau.adhoc.project;
 
+import com.timboudreau.adhoc.project.bytype.ByTypeChildren;
 import java.awt.Image;
 import java.awt.event.ActionEvent;
 import java.beans.PropertyChangeEvent;
@@ -58,9 +59,8 @@ import org.openide.util.lookup.ProxyLookup;
  */
 public class AdhocProjectNode extends FilterNode implements LogicalViewProvider, PropertyChangeListener {
 
-    private List<Runnable> onRefreshFavorites = new ArrayList<>();
+    private final List<Runnable> onRefreshFavorites = new ArrayList<>();
     private final AdhocProject prj;
-    private final FavoritesNode accessed;
     private final SourcesNode sources;
 
     public AdhocProjectNode(AdhocProject prj) throws DataObjectNotFoundException {
@@ -70,8 +70,13 @@ public class AdhocProjectNode extends FilterNode implements LogicalViewProvider,
     AdhocProjectNode(AdhocProject prj, DataObject dob) throws DataObjectNotFoundException {
         super(dob.getNodeDelegate(), new Children.Array(), new ProxyLookup(Lookups.fixed(prj), dob.getLookup()));
         this.prj = prj;
-        getChildren().add(new Node[]{accessed =
+        AbstractNode byType = new AbstractNode(new ByTypeChildren(dob.getPrimaryFile(), factory));
+        byType.setDisplayName ("Files by Type");
+        byType.setName("byType");
+        byType.setIconBaseWithExtension("com/timboudreau/adhoc/project/types.png");
+        getChildren().add(new Node[]{
             new FavoritesNode(prj, onRefreshFavorites),
+            byType,
             sources = new SourcesNode(prj, onRefreshFavorites)});
         prj.addPropertyChangeListener(WeakListeners.propertyChange(this, prj));
     }
@@ -399,199 +404,205 @@ public class AdhocProjectNode extends FilterNode implements LogicalViewProvider,
         public Image getOpenedIcon(int type) {
             return getIcon(type);
         }
+    }
+    
+    private final FavoritesNodeFactory factory = new FavoritesNodeFactory();
+    private class FavoritesNodeFactory implements FavoritesTrackingNodeFactory {
+        @Override
+        public Node createNode(Node orig) {
+            return new FilterNode(orig, new ProxyOpenFilterChildren(prj, orig, AdhocProjectNode.this.onRefreshFavorites));
+        }
+    }
 
-        static class ProxyOpenFilterChildren extends FilterNode.Children {
+    public static class ProxyOpenFilterChildren extends FilterNode.Children {
 
-            private final AdhocProject prj;
-            private final List<Runnable> runs;
+        private final AdhocProject prj;
+        private final List<Runnable> runs;
 
-            public ProxyOpenFilterChildren(AdhocProject prj, Node or, List<Runnable> runs) {
-                super(or);
-                this.runs = runs;
-                this.prj = prj;
+        public ProxyOpenFilterChildren(AdhocProject prj, Node or, List<Runnable> runs) {
+            super(or);
+            this.runs = runs;
+            this.prj = prj;
+        }
+
+        @Override
+        protected Node[] createNodes(Node key) {
+            return new Node[]{new FN(key)};
+        }
+
+        private void updateFavorites(Node node, boolean explicit) {
+            DataObject dob = node.getLookup().lookup(DataObject.class);
+            if (dob != null) {
+                String relPath = FileUtil.getRelativePath(prj.getProjectDirectory(), dob.getPrimaryFile());
+                if (relPath != null) {
+                    Set<Favorite> it = new HashSet<>(prj.favorites());
+                    // Always move it into the highest position
+                    int max = 1;
+                    for (Favorite f : it) {
+                        max = Math.max(max, f.count);
+                    }
+                    boolean found = false;
+                    for (Favorite item : it) {
+                        if (item.relPath.equals(relPath)) {
+                            item.count = explicit ? max + 1 : item.count + 1;
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        it.add(new Favorite(explicit ? max + 1 : 1, relPath));
+                    }
+                    prj.saveFavorites(it);
+                    for (Runnable r : this.runs) {
+                        r.run();
+                    }
+                }
+            }
+        }
+
+        private class FN extends FilterNode {
+
+            public FN(Node original) {
+                super(original, original.getChildren() == Children.LEAF ? Children.LEAF : new ProxyOpenFilterChildren(prj, original, runs));
             }
 
             @Override
-            protected Node[] createNodes(Node key) {
-                return new Node[]{new FN(key)};
-            }
-
-            private void updateFavorites(Node node, boolean explicit) {
-                DataObject dob = node.getLookup().lookup(DataObject.class);
-                if (dob != null) {
-                    String relPath = FileUtil.getRelativePath(prj.getProjectDirectory(), dob.getPrimaryFile());
-                    if (relPath != null) {
-                        Set<Favorite> it = new HashSet<>(prj.favorites());
-                        // Always move it into the highest position
-                        int max = 1;
-                        for (Favorite f : it) {
-                            max = Math.max(max, f.count);
-                        }
-                        boolean found = false;
-                        for (Favorite item : it) {
-                            if (item.relPath.equals(relPath)) {
-                                item.count = explicit ? max + 1 : item.count + 1;
-                                found = true;
-                                break;
-                            }
-                        }
-                        if (!found) {
-                            it.add(new Favorite(explicit ? max + 1 : 1, relPath));
-                        }
-                        prj.saveFavorites(it);
-                        for (Runnable r : this.runs) {
-                            r.run();
-                        }
-                    }
+            public Action[] getActions(boolean context) {
+                Action[] result = super.getActions(context); //To change body of generated methods, choose Tools | Templates.
+                if (result.length > 0) {
+                    Action[] nue = new Action[result.length + 2];
+                    System.arraycopy(result, 0, nue, 0, result.length);
+                    nue[0] = wrapAction(result[0]);
+                    nue[nue.length - 1] = new PutInFavoritesAction();
+                    return nue;
                 }
+                return new Action[]{new PutInFavoritesAction()};
             }
 
-            private class FN extends FilterNode {
+            @Override
+            public Action getPreferredAction() {
+                Action a = super.getPreferredAction();
+                return a == null ? null : wrapAction(super.getPreferredAction());
+            }
 
-                public FN(Node original) {
-                    super(original, original.getChildren() == Children.LEAF
-                            ? Children.LEAF
-                            : new ProxyOpenFilterChildren(prj, original, runs));
+            class PutInFavoritesAction extends AbstractAction {
+
+                PutInFavoritesAction() {
+                    putValue(NAME, "Put In Favorites");
                 }
 
                 @Override
-                public Action[] getActions(boolean context) {
-                    Action[] result = super.getActions(context); //To change body of generated methods, choose Tools | Templates.
-                    if (result.length > 0) {
-                        Action[] nue = new Action[result.length + 2];
-                        System.arraycopy(result, 0, nue, 0, result.length);
-                        nue[0] = wrapAction(result[0]);
-                        nue[nue.length - 1] = new PutInFavoritesAction();
-                        return nue;
-                    }
-                    return new Action[]{new PutInFavoritesAction()};
+                public void actionPerformed(ActionEvent ae) {
+                    updateFavorites(FN.this, true);
+                }
+            }
+
+            private Action wrapAction(Action a) {
+                if (a instanceof ContextAwareAction) {
+                    ContextAwareAction aa = (ContextAwareAction) a;
+                    return new WrapperAction(aa);
+                }
+                return new SimpleWrapper(a);
+            }
+
+            private class SimpleWrapper extends AbstractAction {
+
+                private final Action delegate;
+
+                public SimpleWrapper(Action delegate) {
+                    this.delegate = delegate;
                 }
 
                 @Override
-                public Action getPreferredAction() {
-                    Action a = super.getPreferredAction();
-                    return a == null ? null : wrapAction(super.getPreferredAction());
+                public Object getValue(String string) {
+                    return delegate.getValue(string);
                 }
 
-                class PutInFavoritesAction extends AbstractAction {
-
-                    PutInFavoritesAction() {
-                        putValue(NAME, "Put In Favorites");
-                    }
-
-                    @Override
-                    public void actionPerformed(ActionEvent ae) {
-                        updateFavorites(FN.this, true);
-                    }
+                @Override
+                public void putValue(String string, Object o) {
+                    delegate.putValue(string, o);
                 }
 
-                private Action wrapAction(Action a) {
-                    if (a instanceof ContextAwareAction) {
-                        ContextAwareAction aa = (ContextAwareAction) a;
+                @Override
+                public void setEnabled(boolean bln) {
+                    delegate.setEnabled(bln);
+                }
+
+                @Override
+                public boolean isEnabled() {
+                    return delegate.isEnabled();
+                }
+
+                @Override
+                public void addPropertyChangeListener(PropertyChangeListener pl) {
+                    delegate.addPropertyChangeListener(pl);
+                }
+
+                @Override
+                public void removePropertyChangeListener(PropertyChangeListener pl) {
+                    delegate.removePropertyChangeListener(pl);
+                }
+
+                @Override
+                public void actionPerformed(ActionEvent ae) {
+                    delegate.actionPerformed(ae);
+                    updateFavorites(FN.this, false);
+                }
+            }
+
+            private class WrapperAction extends AbstractAction implements ContextAwareAction {
+
+                private final ContextAwareAction delegate;
+
+                public WrapperAction(ContextAwareAction delegate) {
+                    this.delegate = delegate;
+                }
+
+                @Override
+                public Action createContextAwareInstance(Lookup lkp) {
+                    Action result = delegate.createContextAwareInstance(lkp);
+                    if (result instanceof WrapperAction) {
+                        ContextAwareAction aa = (ContextAwareAction) result;
                         return new WrapperAction(aa);
-                    }
-                    return new SimpleWrapper(a);
-                }
-
-                private class SimpleWrapper extends AbstractAction {
-
-                    private final Action delegate;
-
-                    public SimpleWrapper(Action delegate) {
-                        this.delegate = delegate;
-                    }
-
-                    @Override
-                    public Object getValue(String string) {
-                        return delegate.getValue(string);
-                    }
-
-                    @Override
-                    public void putValue(String string, Object o) {
-                        delegate.putValue(string, o);
-                    }
-
-                    @Override
-                    public void setEnabled(boolean bln) {
-                        delegate.setEnabled(bln);
-                    }
-
-                    @Override
-                    public boolean isEnabled() {
-                        return delegate.isEnabled();
-                    }
-
-                    @Override
-                    public void addPropertyChangeListener(PropertyChangeListener pl) {
-                        delegate.addPropertyChangeListener(pl);
-                    }
-
-                    @Override
-                    public void removePropertyChangeListener(PropertyChangeListener pl) {
-                        delegate.removePropertyChangeListener(pl);
-                    }
-
-                    @Override
-                    public void actionPerformed(ActionEvent ae) {
-                        delegate.actionPerformed(ae);
-                        updateFavorites(FN.this, false);
+                    } else {
+                        return new SimpleWrapper(result);
                     }
                 }
 
-                private class WrapperAction extends AbstractAction implements ContextAwareAction {
+                @Override
+                public Object getValue(String string) {
+                    return delegate.getValue(string);
+                }
 
-                    private final ContextAwareAction delegate;
+                @Override
+                public void putValue(String string, Object o) {
+                    delegate.putValue(string, o);
+                }
 
-                    public WrapperAction(ContextAwareAction delegate) {
-                        this.delegate = delegate;
-                    }
+                @Override
+                public void setEnabled(boolean bln) {
+                    delegate.setEnabled(bln);
+                }
 
-                    @Override
-                    public Action createContextAwareInstance(Lookup lkp) {
-                        Action result = delegate.createContextAwareInstance(lkp);
-                        if (result instanceof WrapperAction) {
-                            ContextAwareAction aa = (ContextAwareAction) result;
-                            return new WrapperAction(aa);
-                        } else {
-                            return new SimpleWrapper(result);
-                        }
-                    }
+                @Override
+                public boolean isEnabled() {
+                    return delegate.isEnabled();
+                }
 
-                    @Override
-                    public Object getValue(String string) {
-                        return delegate.getValue(string);
-                    }
+                @Override
+                public void addPropertyChangeListener(PropertyChangeListener pl) {
+                    delegate.addPropertyChangeListener(pl);
+                }
 
-                    @Override
-                    public void putValue(String string, Object o) {
-                        delegate.putValue(string, o);
-                    }
+                @Override
+                public void removePropertyChangeListener(PropertyChangeListener pl) {
+                    delegate.removePropertyChangeListener(pl);
+                }
 
-                    @Override
-                    public void setEnabled(boolean bln) {
-                        delegate.setEnabled(bln);
-                    }
-
-                    @Override
-                    public boolean isEnabled() {
-                        return delegate.isEnabled();
-                    }
-
-                    @Override
-                    public void addPropertyChangeListener(PropertyChangeListener pl) {
-                        delegate.addPropertyChangeListener(pl);
-                    }
-
-                    @Override
-                    public void removePropertyChangeListener(PropertyChangeListener pl) {
-                        delegate.removePropertyChangeListener(pl);
-                    }
-
-                    @Override
-                    public void actionPerformed(ActionEvent ae) {
-                        delegate.actionPerformed(ae);
-                        updateFavorites(FN.this, false);
-                    }
+                @Override
+                public void actionPerformed(ActionEvent ae) {
+                    delegate.actionPerformed(ae);
+                    updateFavorites(FN.this, false);
                 }
             }
         }
