@@ -77,8 +77,6 @@ public class ByTypeChildren extends Children.Keys<MimeType> {
     public void removeNotify() {
         attached = false;
         task.cancel();
-        types.clear();
-        setKeys(types);
     }
 
     @Override
