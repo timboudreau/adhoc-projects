@@ -34,6 +34,7 @@ import java.util.Set;
 import javax.swing.AbstractAction;
 import javax.swing.Action;
 import org.netbeans.api.project.ProjectInformation;
+import org.netbeans.api.queries.VisibilityQuery;
 import org.netbeans.spi.project.ui.LogicalViewProvider;
 import org.netbeans.spi.project.ui.support.CommonProjectActions;
 import org.openide.filesystems.FileObject;
@@ -427,6 +428,13 @@ public class AdhocProjectNode extends FilterNode implements LogicalViewProvider,
 
         @Override
         protected Node[] createNodes(Node key) {
+            DataObject dob = key.getLookup().lookup(DataObject.class);
+            if (dob != null) {
+                FileObject fo = dob.getPrimaryFile();
+                if (!VisibilityQuery.getDefault().isVisible(fo)) {
+                    return new Node[0];
+                }
+            }
             return new Node[]{new FN(key)};
         }
 
