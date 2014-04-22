@@ -64,6 +64,7 @@ import org.openide.util.Exceptions;
 import org.openide.util.ImageUtilities;
 import org.openide.util.Lookup;
 import org.openide.util.NbPreferences;
+import org.openide.util.Utilities;
 import org.openide.util.lookup.Lookups;
 
 /**
@@ -268,7 +269,13 @@ public class AdhocProject implements Project,
     }
 
     private String prefsNodeName() {
-        String nodeName = ";;" + getProjectDirectory().getPath().replace(
+        String delim;
+        if (Utilities.isWindows()) {
+            delim = "--";
+        } else {
+            delim = ";;";
+        }
+        String nodeName = delim + getProjectDirectory().getPath().replace(
                 '/', '_').replace('\\', '_');
         return nodeName;
     }
