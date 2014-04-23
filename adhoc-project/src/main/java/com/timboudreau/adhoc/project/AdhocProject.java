@@ -276,7 +276,7 @@ public class AdhocProject implements Project,
             delim = ";;";
         }
         String nodeName = delim + getProjectDirectory().getPath().replace(
-                '/', '_').replace('\\', '_');
+                '/', '_').replace('\\', '_').replace(":", "~");
         return nodeName;
     }
 
